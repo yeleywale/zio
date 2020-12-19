@@ -16,20 +16,32 @@
 
 package zio.test.sbt
 
-import scala.collection.mutable.ArrayBuffer
-
 import sbt.testing._
-
-import zio.FunctionIO
+import zio.UIO
 import zio.test.sbt.TestingSupport._
-import zio.test.{ Assertion, DefaultRunnableSpec, Summary, TestArgs, TestAspect }
+import zio.test.{
+  Annotations,
+  Assertion,
+  DefaultRunnableSpec,
+  Spec,
+  Summary,
+  TestArgs,
+  TestAspect,
+  TestFailure,
+  TestSuccess,
+  ZSpec
+}
+
+import java.util.regex.Pattern
+import scala.collection.mutable.ArrayBuffer
+import scala.util.Try
 
 object ZTestFrameworkSpec {
 
   def main(args: Array[String]): Unit =
     run(tests: _*)
 
-  def tests = Seq(
+  def tests: Seq[Try[Unit]] = Seq(
     test("should return correct fingerprints")(testFingerprints()),
     test("should report events")(testReportEvents()),
     test("should log messages")(testLogMessages()),
@@ -39,12 +51,12 @@ object ZTestFrameworkSpec {
     test("should warn when no tests are executed")(testNoTestsExecutedWarning())
   )
 
-  def testFingerprints() = {
+  def testFingerprints(): Unit = {
     val fingerprints = new ZTestFramework().fingerprints.toSeq
     assertEquals("fingerprints", fingerprints, Seq(RunnableSpecFingerprint))
   }
 
-  def testReportEvents() = {
+  def testReportEvents(): Unit = {
     val reported = ArrayBuffer[Event]()
     loadAndExecute(failingSpecFQN, reported.append(_))
 
@@ -60,77 +72,83 @@ object ZTestFrameworkSpec {
   private def sbtEvent(fqn: String, label: String, status: Status) =
     ZTestEvent(fqn, new TestSelector(label), status, None, 0, RunnableSpecFingerprint)
 
-  def testLogMessages() = {
+  def testLogMessages(): Unit = {
     val loggers = Seq.fill(3)(new MockLogger)
 
     loadAndExecute(failingSpecFQN, loggers = loggers)
 
-    loggers.map(_.messages) foreach (
-      messages =>
-        assertEquals(
-          "logged messages",
-          messages.mkString.split("\n").dropRight(1).mkString("\n"),
-          List(
-            s"${reset("info:")} ${red("- some suite")} - ignored: 1",
-            s"${reset("info:")}   ${red("- failing test")}",
-            s"${reset("info:")}     ${blue("1")} did not satisfy ${cyan("equalTo(2)")}",
-            s"${reset("info:")}   ${green("+")} passing test"
-          ).mkString("\n")
-        )
+    loggers.map(_.messages) foreach (messages =>
+      assertEquals(
+        "logged messages",
+        messages.mkString.split("\n").dropRight(1).mkString("\n").withNoLineNumbers,
+        List(
+          s"${reset("info:")} ${red("- some suite")} - ignored: 1",
+          s"${reset("info:")}   ${red("- failing test")}",
+          s"${reset("info:")}     ${blue("1")} did not satisfy ${cyan("equalTo(2)")}",
+          s"${reset("info:")}     ${blue("1")} did not satisfy ${cyan("(") + yellow("equalTo(2)") + cyan(s" ?? ${assertLabel("1")})")}",
+          s"${reset("info:")}   ${green("+")} passing test",
+          s"${reset("info:")}   ${yellow("-")} ${yellow("ignored test")} - ignored: 1"
+        ).mkString("\n")
       )
+    )
   }
 
-  def testColored() = {
+  def testColored(): Unit = {
     val loggers = Seq.fill(3)(new MockLogger)
 
     loadAndExecute(multiLineSpecFQN, loggers = loggers)
-
-    loggers.map(_.messages) foreach (
-      messages =>
-        assertEquals(
-          "logged messages",
-          messages.mkString.split("\n").dropRight(1).mkString("\n"),
-          List(
-            s"${reset("info:")} ${red("- multi-line test")}",
-            s"${reset("info:")}   ${Console.BLUE}Hello,",
-            s"${reset("info:")} ${blue("World!")} did not satisfy ${cyan("equalTo(Hello, World!)")}"
-          ).mkString("\n")
-        )
+    val label = assertLabel(zio.test.showExpression("Hello,\nWorld!"))
+    loggers.map(_.messages) foreach (messages =>
+      assertEquals(
+        "logged messages",
+        messages.mkString.split("\n").dropRight(1).mkString("\n").withNoLineNumbers,
+        List(
+          s"${red("- multi-line test")}",
+          s"  ${Console.BLUE}Hello,",
+          s"${blue("World!")} did not satisfy ${cyan("equalTo(Hello, World!)")}",
+          s"  ${Console.BLUE}Hello,",
+          s"${blue("World!")} did not satisfy ${cyan("(") + yellow("equalTo(Hello, World!)") + cyan(
+            s" ?? ${label.split('\n').mkString("\n" + Console.CYAN)})"
+          )}"
+        ).mkString("\n")
+          .split('\n')
+          .map(s"${reset("info:")} " + _)
+          .mkString("\n")
       )
+    )
   }
 
-  def testTestSelection() = {
+  def testTestSelection(): Unit = {
     val loggers = Seq(new MockLogger)
 
     loadAndExecute(failingSpecFQN, loggers = loggers, testArgs = Array("-t", "passing test"))
 
-    loggers.map(_.messages) foreach (
-      messages =>
-        assertEquals(
-          "logged messages",
-          messages.mkString.split("\n").dropRight(1).mkString("\n"),
-          List(
-            s"${reset("info:")} ${green("+")} some suite",
-            s"${reset("info:")}   ${green("+")} passing test"
-          ).mkString("\n")
-        )
+    loggers.map(_.messages) foreach (messages =>
+      assertEquals(
+        "logged messages",
+        messages.mkString.split("\n").dropRight(1).mkString("\n"),
+        List(
+          s"${reset("info:")} ${green("+")} some suite",
+          s"${reset("info:")}   ${green("+")} passing test"
+        ).mkString("\n")
       )
+    )
   }
 
-  def testSummary() = {
+  def testSummary(): Unit = {
     val taskDef = new TaskDef(failingSpecFQN, RunnableSpecFingerprint, false, Array())
     val runner  = new ZTestFramework().runner(Array(), Array(), getClass.getClassLoader)
     val task = runner
       .tasks(Array(taskDef))
-      .map(task => {
-        val zTestTask = task.asInstanceOf[BaseTestTask]
+      .map(task => task.asInstanceOf[ZTestTask])
+      .map { zTestTask =>
         new ZTestTask(
           zTestTask.taskDef,
           zTestTask.testClassLoader,
-          FunctionIO.succeed(Summary(1, 0, 0, "foo")) >>> zTestTask.sendSummary,
+          UIO.succeed(Summary(1, 0, 0, "foo")) >>> zTestTask.sendSummary,
           TestArgs.empty
         )
-      })
+      }
       .head
 
     task.execute(_ => (), Array.empty)
@@ -138,20 +156,20 @@ object ZTestFrameworkSpec {
     assertEquals("done contains summary", runner.done(), "foo\nDone")
   }
 
-  def testNoTestsExecutedWarning() = {
+  def testNoTestsExecutedWarning(): Unit = {
     val taskDef = new TaskDef(failingSpecFQN, RunnableSpecFingerprint, false, Array())
     val runner  = new ZTestFramework().runner(Array(), Array(), getClass.getClassLoader)
     val task = runner
       .tasks(Array(taskDef))
-      .map(task => {
-        val zTestTask = task.asInstanceOf[BaseTestTask]
+      .map(task => task.asInstanceOf[ZTestTask])
+      .map { zTestTask =>
         new ZTestTask(
           zTestTask.taskDef,
           zTestTask.testClassLoader,
-          FunctionIO.succeed(Summary(0, 0, 0, "foo")) >>> zTestTask.sendSummary,
+          UIO.succeed(Summary(0, 0, 0, "foo")) >>> zTestTask.sendSummary,
           TestArgs.empty
         )
-      })
+      }
       .head
 
     task.execute(_ => (), Array.empty)
@@ -171,12 +189,19 @@ object ZTestFrameworkSpec {
       .tasks(Array(taskDef))
       .head
 
-    task.execute(eventHandler, loggers.toArray)
+    @scala.annotation.tailrec
+    def doRun(tasks: Iterable[Task]): Unit = {
+      val more = tasks.flatMap(_.execute(eventHandler, loggers.toArray))
+      if (more.nonEmpty) {
+        doRun(more)
+      }
+    }
+    doRun(Iterable(task))
   }
 
   lazy val failingSpecFQN = SimpleFailingSpec.getClass.getName
   object SimpleFailingSpec extends DefaultRunnableSpec {
-    def spec = zio.test.suite("some suite")(
+    def spec: Spec[Annotations, TestFailure[Any], TestSuccess] = zio.test.suite("some suite")(
       zio.test.test("failing test") {
         zio.test.assert(1)(Assertion.equalTo(2))
       },
@@ -191,8 +216,15 @@ object ZTestFrameworkSpec {
 
   lazy val multiLineSpecFQN = MultiLineSpec.getClass.getName
   object MultiLineSpec extends DefaultRunnableSpec {
-    def spec = zio.test.test("multi-line test") {
+    def spec: ZSpec[Environment, Failure] = zio.test.test("multi-line test") {
       zio.test.assert("Hello,\nWorld!")(Assertion.equalTo("Hello, World!"))
     }
+  }
+
+  lazy val sourceFilePath: String       = zio.test.sourcePath
+  def assertLabel(expr: String): String = s""""assert(`$expr`) (at $sourceFilePath:XXX)""""
+  implicit class TestOutputOps(output: String) {
+    def withNoLineNumbers: String =
+      output.replaceAll(Pattern.quote(sourceFilePath + ":") + "\\d+", sourceFilePath + ":XXX")
   }
 }

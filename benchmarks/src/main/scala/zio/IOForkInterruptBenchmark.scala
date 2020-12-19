@@ -1,11 +1,10 @@
 package zio
 
-import java.util.concurrent.TimeUnit
-
 import cats.effect.concurrent.Deferred
 import org.openjdk.jmh.annotations._
-
 import zio.IOBenchmarks._
+
+import java.util.concurrent.TimeUnit
 
 @State(Scope.Thread)
 @BenchmarkMode(Array(Mode.Throughput))
@@ -31,7 +30,8 @@ class IOForkInterruptBenchmark {
             .start
             .flatMap(f => p1.get.flatMap(_ => f.cancel.flatMap(_ => p2.get.flatMap(_ => loop(i + 1)))))
         }
-      } else Task.unit
+      }
+      else Task.unit
 
     loop(0).runSyncUnsafe()
   }
@@ -50,7 +50,8 @@ class IOForkInterruptBenchmark {
               .start
               .flatMap(f => p1.get.flatMap(_ => f.cancel.flatMap(_ => p2.get.flatMap(_ => loop(i + 1)))))
           }
-        } else IO.unit
+        }
+      else IO.unit
 
     loop(0).unsafeRunSync()
   }

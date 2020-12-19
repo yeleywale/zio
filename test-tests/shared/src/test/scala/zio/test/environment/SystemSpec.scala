@@ -8,7 +8,7 @@ import zio.test.environment.TestSystem._
 
 object SystemSpec extends ZIOBaseSpec {
 
-  def spec = suite("SystemSpec")(
+  def spec: ZSpec[Environment, Failure] = suite("SystemSpec")(
     testM("check set values are cleared at the start of repeating tests") {
       for {
         env <- system.env("k1")
@@ -64,10 +64,9 @@ object SystemSpec extends ZIOBaseSpec {
       } yield assert(prop)(isNone)
     },
     testM("fetch the system's line separator and check that it is identical to Data.lineSeparator") {
-      for {
-        testSystem <- TestSystem.makeTest(Data(lineSeparator = ","))
-        lineSep    <- testSystem.lineSeparator
-      } yield assert(lineSep)(equalTo(","))
+      TestSystem.live(Data(lineSeparator = ",")).build.map(_.get[zio.system.System.Service]).use { testSystem =>
+        assertM(testSystem.lineSeparator)(equalTo(","))
+      }
     },
     testM("fetch the system's line separator and check that if it is set, return the set value") {
       for {

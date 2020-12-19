@@ -5,14 +5,14 @@ import zio.test._
 
 object NeedsEnvSpec extends ZIOBaseSpec {
 
-  def spec = suite("NeedsEnvSpec")(
+  def spec: ZSpec[Environment, Failure] = suite("NeedsEnvSpec")(
     testM("useful combinators compile") {
       val result = typeCheck {
         """
             import zio._
             import zio.console._
             val sayHello = console.putStrLn("Hello, World!")
-            sayHello.provide(Console.Live)
+            sayHello.provideLayer(Console.live)
             """
       }
       assertM(result)(isRight(isUnit))
@@ -23,7 +23,7 @@ object NeedsEnvSpec extends ZIOBaseSpec {
             import zio._
             import zio.console._
             val uio = UIO.succeed("Hello, World!")
-            uio.provide(Console.Live)
+            uio.provideLayer(Console.live)
             """
       }
       assertM(result)(isLeft(anything))

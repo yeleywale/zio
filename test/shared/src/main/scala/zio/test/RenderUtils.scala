@@ -16,12 +16,15 @@
 
 package zio.test
 
-import scala.{ Console => SConsole }
+import scala.{Console => SConsole}
 
 private[test] object ConsoleUtils {
 
   def green(s: String): String =
     SConsole.GREEN + s + SConsole.RESET
+
+  def yellow(s: String): String =
+    SConsole.YELLOW + s + SConsole.RESET
 
   def red(s: String): String =
     SConsole.RED + s + SConsole.RESET
@@ -32,6 +35,4 @@ private[test] object ConsoleUtils {
   def cyan(s: String): String =
     SConsole.CYAN + s + SConsole.RESET
 
-  def yellowThenCyan(s: String): String =
-    SConsole.YELLOW + s + SConsole.CYAN
 }

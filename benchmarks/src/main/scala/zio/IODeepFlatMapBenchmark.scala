@@ -1,12 +1,10 @@
 package zio
 
-import java.util.concurrent.TimeUnit
-
-import scala.concurrent.Await
-
 import org.openjdk.jmh.annotations._
-
 import zio.IOBenchmarks._
+
+import java.util.concurrent.TimeUnit
+import scala.concurrent.Await
 
 @State(Scope.Thread)
 @BenchmarkMode(Array(Mode.Throughput))
@@ -20,9 +18,7 @@ class IODeepFlatMapBenchmark {
     def fib(n: Int): Thunk[BigInt] =
       if (n <= 1) Thunk(n)
       else
-        fib(n - 1).flatMap { a =>
-          fib(n - 2).flatMap(b => Thunk(a + b))
-        }
+        fib(n - 1).flatMap(a => fib(n - 2).flatMap(b => Thunk(a + b)))
 
     fib(depth).unsafeRun()
   }
@@ -35,9 +31,7 @@ class IODeepFlatMapBenchmark {
     def fib(n: Int): Future[BigInt] =
       if (n <= 1) Future(n)
       else
-        fib(n - 1).flatMap { a =>
-          fib(n - 2).flatMap(b => Future(a + b))
-        }
+        fib(n - 1).flatMap(a => fib(n - 2).flatMap(b => Future(a + b)))
 
     Await.result(fib(depth), Inf)
   }
@@ -49,9 +43,7 @@ class IODeepFlatMapBenchmark {
     def fib(n: Int): CompletableFuture[BigInt] =
       if (n <= 1) CompletableFuture.completedFuture(n)
       else
-        fib(n - 1).thenCompose { a =>
-          fib(n - 2).thenCompose(b => CompletableFuture.completedFuture(a + b))
-        }
+        fib(n - 1).thenCompose(a => fib(n - 2).thenCompose(b => CompletableFuture.completedFuture(a + b)))
 
     fib(depth)
       .get()
@@ -64,9 +56,7 @@ class IODeepFlatMapBenchmark {
     def fib(n: Int): Mono[BigInt] =
       if (n <= 1) Mono.fromSupplier(() => n)
       else
-        fib(n - 1).flatMap { a =>
-          fib(n - 2).flatMap(b => Mono.fromSupplier(() => a + b))
-        }
+        fib(n - 1).flatMap(a => fib(n - 2).flatMap(b => Mono.fromSupplier(() => a + b)))
 
     fib(depth)
       .block()
@@ -79,9 +69,7 @@ class IODeepFlatMapBenchmark {
     def fib(n: Int): Single[BigInt] =
       if (n <= 1) Single.fromCallable(() => n)
       else
-        fib(n - 1).flatMap { a =>
-          fib(n - 2).flatMap(b => Single.fromCallable(() => a + b))
-        }
+        fib(n - 1).flatMap(a => fib(n - 2).flatMap(b => Single.fromCallable(() => a + b)))
 
     fib(depth)
       .blockingGet()
@@ -89,14 +77,12 @@ class IODeepFlatMapBenchmark {
 
   @Benchmark
   def twitterDeepFlatMap(): BigInt = {
-    import com.twitter.util.{ Await, Future }
+    import com.twitter.util.{Await, Future}
 
     def fib(n: Int): Future[BigInt] =
       if (n <= 1) Future(n)
       else
-        fib(n - 1).flatMap { a =>
-          fib(n - 2).flatMap(b => Future(a + b))
-        }
+        fib(n - 1).flatMap(a => fib(n - 2).flatMap(b => Future(a + b)))
 
     Await.result(fib(depth))
   }
@@ -108,26 +94,22 @@ class IODeepFlatMapBenchmark {
     def fib(n: Int): Task[BigInt] =
       if (n <= 1) Task.eval(n)
       else
-        fib(n - 1).flatMap { a =>
-          fib(n - 2).flatMap(b => Task.eval(a + b))
-        }
+        fib(n - 1).flatMap(a => fib(n - 2).flatMap(b => Task.eval(a + b)))
 
-    fib(depth).runSyncStep.right.get
+    fib(depth).runSyncStep.fold(_ => sys.error("Either.right.get on Left"), identity)
   }
 
   @Benchmark
-  def scalazDeepFlatMap(): BigInt = zioDeepFlatMap(IOBenchmarks)
+  def zioDeepFlatMap(): BigInt = zioDeepFlatMap(IOBenchmarks)
 
   @Benchmark
-  def scalazTracedDeepFlatMap(): BigInt = zioDeepFlatMap(TracedRuntime)
+  def zioTracedDeepFlatMap(): BigInt = zioDeepFlatMap(TracedRuntime)
 
   private[this] def zioDeepFlatMap(runtime: Runtime[Any]): BigInt = {
     def fib(n: Int): UIO[BigInt] =
       if (n <= 1) ZIO.effectTotal[BigInt](n)
       else
-        fib(n - 1).flatMap { a =>
-          fib(n - 2).flatMap(b => ZIO.effectTotal(a + b))
-        }
+        fib(n - 1).flatMap(a => fib(n - 2).flatMap(b => ZIO.effectTotal(a + b)))
 
     runtime.unsafeRun(fib(depth))
   }
@@ -139,10 +121,8 @@ class IODeepFlatMapBenchmark {
     def fib(n: Int): IO[BigInt] =
       if (n <= 1) IO(n)
       else
-        fib(n - 1).flatMap { a =>
-          fib(n - 2).flatMap(b => IO(a + b))
-        }
+        fib(n - 1).flatMap(a => fib(n - 2).flatMap(b => IO(a + b)))
 
-    fib(depth).unsafeRunSync
+    fib(depth).unsafeRunSync()
   }
 }

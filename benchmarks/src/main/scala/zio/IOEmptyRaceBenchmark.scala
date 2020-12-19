@@ -1,10 +1,9 @@
 package zio
 
-import java.util.concurrent.TimeUnit
-
 import org.openjdk.jmh.annotations._
-
 import zio.IOBenchmarks._
+
+import java.util.concurrent.TimeUnit
 
 @State(Scope.Thread)
 @BenchmarkMode(Array(Mode.Throughput))
@@ -47,8 +46,8 @@ class IOEmptyRaceBenchmark {
 
   private[this] def zioEmptyRace(runtime: Runtime[Any]): Int = {
     def loop(i: Int): UIO[Int] =
-      if (i < size) IO.never.raceAttempt(IO.effectTotal(i + 1)).flatMap(loop)
-      else IO.succeed(i)
+      if (i < size) IO.never.raceFirst(IO.effectTotal(i + 1)).flatMap(loop)
+      else IO.succeedNow(i)
 
     runtime.unsafeRun(loop(0))
   }

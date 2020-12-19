@@ -1,12 +1,11 @@
 package zio
 
-import java.util.concurrent.TimeUnit
-
 import org.openjdk.jmh.annotations._
 import org.scalacheck
-
 import zio.IOBenchmarks.unsafeRun
 import zio.test.Gen
+
+import java.util.concurrent.TimeUnit
 
 @State(Scope.Thread)
 @BenchmarkMode(Array(Mode.AverageTime))
@@ -20,15 +19,31 @@ class GenBenchmarks {
   var elementSize: Int = _
   @Benchmark
   def zioDouble: List[Double] =
-    unsafeRun(Gen.listOfN(listSize)(Gen.uniform).sample.map(_.value).runHead.get)
+    unsafeRun(Gen.listOfN(listSize)(Gen.uniform).sample.map(_.value).runHead.get.provideLayer(ZEnv.live))
 
   @Benchmark
   def zioIntListsOfSizeN: List[List[Int]] =
-    unsafeRun(Gen.listOfN(listSize)(Gen.listOfN(elementSize)(Gen.anyInt)).sample.map(_.value).runHead.get)
+    unsafeRun(
+      Gen
+        .listOfN(listSize)(Gen.listOfN(elementSize)(Gen.anyInt))
+        .sample
+        .map(_.value)
+        .runHead
+        .get
+        .provideLayer(ZEnv.live)
+    )
 
   @Benchmark
   def zioStringsOfSizeN: List[String] =
-    unsafeRun(Gen.listOfN(listSize)(Gen.stringN(elementSize)(Gen.anyChar)).sample.map(_.value).runHead.get)
+    unsafeRun(
+      Gen
+        .listOfN(listSize)(Gen.stringN(elementSize)(Gen.anyChar))
+        .sample
+        .map(_.value)
+        .runHead
+        .get
+        .provideLayer(ZEnv.live)
+    )
 
   @Benchmark
   def scalaCheckDoubles: List[Double] =
@@ -55,7 +70,7 @@ class GenBenchmarks {
       .run(hedgehog.Size(0), hedgehog.core.Seed.fromTime())
       .value
       ._2
-      .head
+      .get
 
   @Benchmark
   def hedgehogIntListsOfSizeN: List[List[Int]] =
@@ -66,7 +81,7 @@ class GenBenchmarks {
       .run(hedgehog.Size(0), hedgehog.core.Seed.fromTime())
       .value
       ._2
-      .head
+      .get
 
   @Benchmark
   def hedgehogStringsOfSizeN: List[String] =
@@ -76,18 +91,18 @@ class GenBenchmarks {
       .run(hedgehog.Size(0), hedgehog.core.Seed.fromTime())
       .value
       ._2
-      .head
+      .get
 
   @Benchmark
   def nyayaDoubles: List[Double] =
-    nyaya.gen.Gen.double.list.sample
+    nyaya.gen.Gen.double.list.sample()
 
   @Benchmark
   def nyayaIntListsOfSizeN: List[List[Int]] =
-    nyaya.gen.Gen.int.list(0 to listSize).list(0 to elementSize).sample
+    nyaya.gen.Gen.int.list(0 to listSize).list(0 to elementSize).sample()
 
   @Benchmark
   def nyayaStringsOfSizeN: List[String] =
-    nyaya.gen.Gen.string(0 to elementSize).list(0 to listSize).sample
+    nyaya.gen.Gen.string(0 to elementSize).list(0 to listSize).sample()
 
 }

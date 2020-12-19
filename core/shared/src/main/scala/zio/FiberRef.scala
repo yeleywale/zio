@@ -45,14 +45,43 @@ package zio
  * @param initial
  * @tparam A
  */
-final class FiberRef[A] private[zio] (private[zio] val initial: A, private[zio] val combine: (A, A) => A)
-    extends Serializable { self =>
+final class FiberRef[A] private[zio] (
+  private[zio] val initial: A,
+  private[zio] val fork: A => A,
+  private[zio] val join: (A, A) => A
+) extends Serializable { self =>
 
   /**
    * Reads the value associated with the current fiber. Returns initial value if
    * no value was `set` or inherited from parent.
    */
   val get: UIO[A] = modify(v => (v, v))
+
+  /**
+   * Atomically sets the value associated with the current fiber and returns
+   * the old value.
+   */
+  def getAndSet(a: A): UIO[A] =
+    modify(v => (v, a))
+
+  /**
+   * Atomically modifies the `FiberRef` with the specified function and returns
+   * the old value.
+   */
+  def getAndUpdate(f: A => A): UIO[A] = modify { v =>
+    val result = f(v)
+    (v, result)
+  }
+
+  /**
+   * Atomically modifies the `FiberRef` with the specified partial function and
+   * returns the old value.
+   * If the function is undefined on the current value it doesn't change it.
+   */
+  def getAndUpdateSome(pf: PartialFunction[A, A]): UIO[A] = modify { v =>
+    val result = pf.applyOrElse[A, A](v, identity)
+    (v, result)
+  }
 
   /**
    * Returns an `IO` that runs with `value` bound to the current fiber.
@@ -90,16 +119,35 @@ final class FiberRef[A] private[zio] (private[zio] val initial: A, private[zio] 
   /**
    * Atomically modifies the `FiberRef` with the specified function.
    */
-  def update(f: A => A): UIO[A] = modify { v =>
+  def update(f: A => A): UIO[Unit] = modify { v =>
+    val result = f(v)
+    ((), result)
+  }
+
+  /**
+   * Atomically modifies the `FiberRef` with the specified function and returns
+   * the result.
+   */
+  def updateAndGet(f: A => A): UIO[A] = modify { v =>
     val result = f(v)
     (result, result)
   }
 
   /**
    * Atomically modifies the `FiberRef` with the specified partial function.
-   * if the function is undefined in the current value it returns the old value without changing it.
+   * If the function is undefined on the current value it doesn't change it.
    */
-  def updateSome(pf: PartialFunction[A, A]): UIO[A] = modify { v =>
+  def updateSome(pf: PartialFunction[A, A]): UIO[Unit] = modify { v =>
+    val result = pf.applyOrElse[A, A](v, identity)
+    ((), result)
+  }
+
+  /**
+   * Atomically modifies the `FiberRef` with the specified partial function.
+   * If the function is undefined on the current value it returns the old value
+   * without changing it.
+   */
+  def updateSomeAndGet(pf: PartialFunction[A, A]): UIO[A] = modify { v =>
     val result = pf.applyOrElse[A, A](v, identity)
     (result, result)
   }
@@ -154,6 +202,6 @@ object FiberRef extends Serializable {
   /**
    * Creates a new `FiberRef` with given initial value.
    */
-  def make[A](initialValue: A, combine: (A, A) => A = (_: A, last: A) => last): UIO[FiberRef[A]] =
-    new ZIO.FiberRefNew(initialValue, combine)
+  def make[A](initial: A, fork: A => A = (a: A) => a, join: (A, A) => A = ((_: A, a: A) => a)): UIO[FiberRef[A]] =
+    new ZIO.FiberRefNew(initial, fork, join)
 }

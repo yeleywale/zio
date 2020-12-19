@@ -18,9 +18,33 @@ package zio.test
 
 import zio.Cause
 
-sealed trait TestFailure[+E]
+sealed abstract class TestFailure[+E]
 
 object TestFailure {
   final case class Assertion(result: TestResult) extends TestFailure[Nothing]
   final case class Runtime[+E](cause: Cause[E])  extends TestFailure[E]
+
+  /**
+   * Constructs an assertion failure with the specified result.
+   */
+  def assertion(result: TestResult): TestFailure[Nothing] =
+    Assertion(result)
+
+  /**
+   * Constructs a runtime failure that dies with the specified `Throwable`.
+   */
+  def die(t: Throwable): TestFailure[Nothing] =
+    halt(Cause.die(t))
+
+  /**
+   * Constructs a runtime failure that fails with the specified error.
+   */
+  def fail[E](e: E): TestFailure[E] =
+    halt(Cause.fail(e))
+
+  /**
+   * Constructs a runtime failure with the specified cause.
+   */
+  def halt[E](cause: Cause[E]): TestFailure[E] =
+    Runtime(cause)
 }

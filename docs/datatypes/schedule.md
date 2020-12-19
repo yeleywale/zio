@@ -10,13 +10,13 @@ import zio._
 Schedules allow you to define and compose flexible recurrence schedules, which can be used to repeat actions, or retry actions in the event of errors. Schedules are used in the following functions:
 
  * **Repetition**
-   * `IO#repeat` — Repeats an effect until the schedule is done.
+   * `IO#repeat` — Repeats an effect until the schedule is done.
    * `IO#repeatOrElse` — Repeats an effect until the schedule is done, with a fallback for errors.
    * `IO#repeatOrElse0` — Repeats an effect until the schedule is done, with a more powerful fallback for errors.
  * **Retries**
    * `IO#retry` – Retries an effect until it succeeds.
-   * `IO#retryOrElse` — Retries an effect until it succeeds, with a fallback for errors.
-   * `IO#retryOrElse0` — Retries an effect until it succeeds, with a more powerful fallback for errors.
+   * `IO#retryOrElse` — Retries an effect until it succeeds, with a fallback for errors.
+   * `IO#retryOrElse0` — Retries an effect until it succeeds, with a more powerful fallback for errors.
 
 Schedules define stateful, possibly effectful, recurring schedules of events, and compose in a variety of ways.
 
@@ -32,12 +32,6 @@ A schedule that always recurs:
 
 ```scala mdoc:silent
 val forever = Schedule.forever
-```
-
-A schedule that never executes:
-
-```scala mdoc:silent
-val never = Schedule.never
 ```
 
 A schedule that recurs 10 times:
@@ -69,7 +63,7 @@ val fibonacci = Schedule.fibonacci(10.milliseconds)
 Applying random jitter to a schedule:
 
 ```scala mdoc:silent
-val jitteredExp = Schedule.exponential(10.milliseconds).jittered()
+val jitteredExp = Schedule.exponential(10.milliseconds).jittered
 ```
 
 Modifies the delay of a schedule:
@@ -100,7 +94,7 @@ val expCapped = Schedule.exponential(100.milliseconds) || Schedule.spaced(1.seco
 Stops retrying after a specified amount of time has elapsed:
 
 ```scala mdoc:silent
-val expMaxElapsed = Schedule.exponential(10.milliseconds) && Schedule.elapsed.whileOutput(_ < 30.seconds)
+val expMaxElapsed = (Schedule.exponential(10.milliseconds) >>> Schedule.elapsed).whileOutput(_ < 30.seconds)
 ```
 
 Retry only when a specific exception occurs:
@@ -108,7 +102,7 @@ Retry only when a specific exception occurs:
 ```scala mdoc:silent
 import scala.concurrent.TimeoutException
 
-val whileTimeout = Schedule.exponential(10.milliseconds) && Schedule.doWhile[Throwable] {
+val whileTimeout = Schedule.exponential(10.milliseconds) && Schedule.recurWhile[Throwable] {
   case _: TimeoutException => true
   case _ => false
 }

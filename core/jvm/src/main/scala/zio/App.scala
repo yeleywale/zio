@@ -26,7 +26,7 @@ package zio
  * object MyApp extends App {
  *
  *   final def run(args: List[String]) =
- *     myAppLogic.fold(_ => 1, _ => 0)
+ *     myAppLogic.exitCode
  *
  *   def myAppLogic =
  *     for {
@@ -37,13 +37,13 @@ package zio
  * }
  * }}}
  */
-trait App extends DefaultRuntime {
+trait App extends BootstrapRuntime {
 
   /**
    * The main function of the application, which will be passed the command-line
    * arguments to the program and has to return an `IO` with the errors fully handled.
    */
-  def run(args: List[String]): ZIO[ZEnv, Nothing, Int]
+  def run(args: List[String]): URIO[ZEnv, ExitCode]
 
   /**
    * The Scala main function, intended to be called only by the Scala runtime.
@@ -55,13 +55,13 @@ trait App extends DefaultRuntime {
         for {
           fiber <- run(args0.toList).fork
           _ <- IO.effectTotal(java.lang.Runtime.getRuntime.addShutdownHook(new Thread {
-                override def run() = {
-                  val _ = unsafeRunSync(fiber.interrupt)
-                }
-              }))
+                 override def run() = {
+                   val _ = unsafeRunSync(fiber.interrupt)
+                 }
+               }))
           result <- fiber.join
           _      <- fiber.interrupt
-        } yield result
+        } yield result.code
       )
     )
     catch { case _: SecurityException => }

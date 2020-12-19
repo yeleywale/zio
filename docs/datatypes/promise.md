@@ -79,7 +79,7 @@ you can use `poll`:
 ```scala mdoc:silent
 val ioPromise4: UIO[Promise[Exception, String]] = Promise.make[Exception, String]
 val ioIsItDone: UIO[Option[IO[Exception, String]]] = ioPromise4.flatMap(p => p.poll)
-val ioIsItDone2: IO[Unit, IO[Exception, String]] = ioPromise4.flatMap(p => p.poll.get)
+val ioIsItDone2: IO[Option[Nothing], IO[Exception, String]] = ioPromise4.flatMap(p => p.poll.get)
 ```
 
 If the Promise was not completed when you called `poll` then the IO will fail with the `Unit` value otherwise,
@@ -101,7 +101,7 @@ val program: ZIO[Console with Clock, IOException, Unit] =
   for {
     promise         <-  Promise.make[Nothing, String]
     sendHelloWorld  =   (IO.succeed("hello world") <* sleep(1.second)).flatMap(promise.succeed)
-    getAndPrint     =   promise.await.flatMap(putStrLn)
+    getAndPrint     =   promise.await.flatMap(putStrLn(_))
     fiberA          <-  sendHelloWorld.fork
     fiberB          <-  getAndPrint.fork
     _               <-  (fiberA zip fiberB).join

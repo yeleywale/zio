@@ -22,37 +22,36 @@ import zio.test._
 
 object TSetSpec extends ZIOBaseSpec {
 
-  def spec = suite("TSet")(
+  def spec: ZSpec[Environment, Failure] = suite("TSet")(
     suite("factories")(
       testM("apply") {
-        val tx = TSet.make(1, 2, 2, 3).flatMap(_.toList)
+        val tx = TSet.make(1, 2, 2, 3).flatMap[Any, Nothing, List[Int]](_.toList)
         assertM(tx.commit)(hasSameElements(List(1, 2, 3)))
-
       },
       testM("empty") {
-        val tx = TSet.empty[Int].flatMap(_.toList)
+        val tx = TSet.empty[Int].flatMap[Any, Nothing, List[Int]](_.toList)
         assertM(tx.commit)(isEmpty)
       },
       testM("fromIterable") {
-        val tx = TSet.fromIterable(List(1, 2, 2, 3)).flatMap(_.toList)
+        val tx = TSet.fromIterable(List(1, 2, 2, 3)).flatMap[Any, Nothing, List[Int]](_.toList)
         assertM(tx.commit)(hasSameElements(List(1, 2, 3)))
       }
     ),
     suite("lookups")(
       testM("contains existing element") {
-        val tx = TSet.make(1, 2, 3, 4).flatMap(_.contains(1))
+        val tx = TSet.make(1, 2, 3, 4).flatMap[Any, Nothing, Boolean](_.contains(1))
         assertM(tx.commit)(isTrue)
       },
       testM("contains non-existing element") {
-        val tx = TSet.make(1, 2, 3, 4).flatMap(_.contains(0))
+        val tx = TSet.make(1, 2, 3, 4).flatMap[Any, Nothing, Boolean](_.contains(0))
         assertM(tx.commit)(isFalse)
       },
       testM("collect all elements") {
-        val tx = TSet.make(1, 2, 3, 4).flatMap(_.toList)
+        val tx = TSet.make(1, 2, 3, 4).flatMap[Any, Nothing, List[Int]](_.toList)
         assertM(tx.commit)(hasSameElements(List(1, 2, 3, 4)))
       },
       testM("cardinality") {
-        val tx = TSet.make(1, 2, 3, 4).flatMap(_.size)
+        val tx = TSet.make(1, 2, 3, 4).flatMap[Any, Nothing, Int](_.size)
         assertM(tx.commit)(equalTo(4))
       }
     ),
@@ -200,6 +199,17 @@ object TSetSpec extends ZIOBaseSpec {
           } yield res
 
         assertM(tx.commit)(equalTo(0))
+      },
+      testM("toSet") {
+        val set = Set(1, 2, 3)
+
+        val tx =
+          for {
+            tset <- TSet.fromIterable(set)
+            res  <- tset.toSet
+          } yield res
+
+        assertM(tx.commit)(hasSameElements(set))
       }
     ),
     suite("set operations")(

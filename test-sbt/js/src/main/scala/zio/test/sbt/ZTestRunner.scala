@@ -16,12 +16,11 @@
 
 package zio.test.sbt
 
-import scala.collection.mutable
-
 import sbt.testing._
+import zio.test.{Summary, TestArgs}
+import zio.{Exit, Runtime, ZIO}
 
-import zio.test.{ Summary, TestArgs }
-import zio.{ Exit, Runtime }
+import scala.collection.mutable
 
 sealed abstract class ZTestRunner(
   val args: Array[String],
@@ -47,15 +46,13 @@ sealed abstract class ZTestRunner(
     defs.map(new ZTestTask(_, testClassLoader, runnerType, sendSummary, TestArgs.parse(args)))
 
   override def receiveMessage(summary: String): Option[String] = {
-    SummaryProtocol.deserialize(summary).foreach { s =>
-      summaries += s
-    }
+    SummaryProtocol.deserialize(summary).foreach(s => summaries += s)
 
     None
   }
 
   override def serializeTask(task: Task, serializer: TaskDef => String): String =
-    serializer(task.taskDef)
+    serializer(task.taskDef())
 
   override def deserializeTask(task: String, deserializer: String => TaskDef): Task =
     new ZTestTask(deserializer(task), testClassLoader, runnerType, sendSummary, TestArgs.parse(args))
@@ -65,10 +62,10 @@ final class ZMasterTestRunner(args: Array[String], remoteArgs: Array[String], te
     extends ZTestRunner(args, remoteArgs, testClassLoader, "master") {
 
   //This implementation seems to be used when there's only single spec to run
-  override val sendSummary: SendSummary = SendSummary.fromSend(summary => {
+  override val sendSummary: SendSummary = SendSummary.fromSend { summary =>
     summaries += summary
     ()
-  })
+  }
 
 }
 
@@ -88,11 +85,12 @@ final class ZTestTask(
 ) extends BaseTestTask(taskDef, testClassLoader, sendSummary, testArgs) {
 
   def execute(eventHandler: EventHandler, loggers: Array[Logger], continuation: Array[Task] => Unit): Unit =
-    Runtime((), spec.platform).unsafeRunAsync(run(eventHandler, loggers)) { exit =>
-      exit match {
-        case Exit.Failure(cause) => Console.err.println(s"$runnerType failed: " + cause.prettyPrint)
-        case _                   =>
+    Runtime((), specInstance.platform)
+      .unsafeRunAsync((sbtTestLayer(loggers).build >>> run(eventHandler).toManaged_).use_(ZIO.unit)) { exit =>
+        exit match {
+          case Exit.Failure(cause) => Console.err.println(s"$runnerType failed: " + cause.prettyPrint)
+          case _                   =>
+        }
+        continuation(Array())
       }
-      continuation(Array())
-    }
 }

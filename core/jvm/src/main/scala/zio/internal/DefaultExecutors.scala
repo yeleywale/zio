@@ -1,13 +1,13 @@
 package zio.internal
 
-import java.util.concurrent.{ LinkedBlockingQueue, RejectedExecutionException, ThreadPoolExecutor, TimeUnit }
+import java.util.concurrent.{LinkedBlockingQueue, RejectedExecutionException, ThreadPoolExecutor, TimeUnit}
 
 private[internal] abstract class DefaultExecutors {
   final def makeDefault(yieldOpCount: Int): Executor =
     fromThreadPoolExecutor(_ => yieldOpCount) {
       val corePoolSize  = Runtime.getRuntime.availableProcessors() * 2
       val maxPoolSize   = corePoolSize
-      val keepAliveTime = 1000L
+      val keepAliveTime = 60000L
       val timeUnit      = TimeUnit.MILLISECONDS
       val workQueue     = new LinkedBlockingQueue[Runnable]()
       val threadFactory = new NamedThreadFactory("zio-default-async", true)
@@ -62,7 +62,5 @@ private[internal] abstract class DefaultExecutors {
         } catch {
           case _: RejectedExecutionException => false
         }
-
-      def here = false
     }
 }

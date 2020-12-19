@@ -10,7 +10,8 @@
       "overview/overview_testing_effects",
       "overview/overview_running_effects",
       "overview/overview_background",
-      "overview/overview_performance"
+      "overview/overview_performance",
+      "overview/overview_platforms"
     ]
   },
   "datatypes-sidebar": {
@@ -30,6 +31,8 @@
       "datatypes/datatypes_chunk",
       "datatypes/datatypes_tarray",
       "datatypes/datatypes_tmap",
+      "datatypes/datatypes_tpriorityqueue",
+      "datatypes/datatypes_treentrantlock",
       "datatypes/datatypes_tpromise",
       "datatypes/datatypes_tqueue",
       "datatypes/datatypes_tref",
@@ -57,6 +60,7 @@
       "usecases/usecases_concurrency",
       "usecases/usecases_parallelism",
       "usecases/usecases_queuing",
+      "usecases/usecases_retrying",
       "usecases/usecases_scheduling",
       "usecases/usecases_streaming",
       "usecases/usecases_testing"
@@ -65,11 +69,13 @@
   "howto-sidebar": {
     "How to": [
       "howto/howto_index",
-      "howto/howto_use_module_pattern",
+      "howto/howto_use_layers",
+      "howto/howto_test_assertions",
       "howto/howto_test_effects",
       "howto/howto_mock_services",
       "howto/howto_handle_errors",
-      "howto/howto_access_system_information"
+      "howto/howto_access_system_information",
+      "howto/howto_macros"
     ]
   },
   "resources-sidebar": {
@@ -85,6 +91,7 @@
   "about-sidebar": {
       "About": [
           "about/about_index",
+          "about/about_coding_guidelines",
           "about/about_contributing",
           "about/about_coc"
       ]

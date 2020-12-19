@@ -16,9 +16,8 @@
 
 package zio.internal.stacktracer.impl
 
-import java.io.{ DataInputStream, InputStream }
+import java.io.{DataInputStream, InputStream}
 import java.lang.invoke.SerializedLambda
-
 import scala.annotation.switch
 import scala.util.control.NonFatal
 
@@ -38,7 +37,7 @@ import scala.util.control.NonFatal
  */
 object AkkaLineNumbers {
 
-  sealed trait Result
+  sealed abstract class Result
   case object NoSourceInfo                                  extends Result
   final case class UnknownSourceFormat(explanation: String) extends Result
   final case class SourceFile(filename: String) extends Result {
@@ -46,7 +45,7 @@ object AkkaLineNumbers {
   }
   final case class SourceFileLines(filename: String, from: Int, to: Int, className: String, methodName: String)
       extends Result {
-    override def toString = if (from != to) s"$filename:$from-$to" else s"$filename:$from"
+    override def toString: String = if (from != to) s"$filename:$from-$to" else s"$filename:$from"
   }
 
   /**
@@ -171,7 +170,7 @@ object AkkaLineNumbers {
         }
 
     } catch {
-      case NonFatal(ex) => UnknownSourceFormat(s"parse error: ${ex.getMessage}")
+      case ex if NonFatal(ex) => UnknownSourceFormat(s"parse error: ${ex.getMessage}")
     } finally {
       try dis.close()
       catch {
@@ -181,14 +180,19 @@ object AkkaLineNumbers {
     }
   }
 
-  private[this] def getStreamForClass(c: Class[_]): Option[(InputStream, String, None.type)] = {
-    val name     = c.getName
-    val resource = name.replace('.', '/') + ".class"
-    val cl       = c.getClassLoader
-    val r        = cl.getResourceAsStream(resource)
-    if (debug) println(s"LNB:     resource '$resource' resolved to stream $r")
-    Option(r).map((_, name, None))
-  }
+  private[this] def getStreamForClass(c: Class[_]): Option[(InputStream, String, None.type)] =
+    try {
+      val name     = c.getName
+      val resource = name.replace('.', '/') + ".class"
+      val cl       = c.getClassLoader
+      val r        = if (cl ne null) cl.getResourceAsStream(resource) else null
+      if (debug) println(s"LNB:     resource '$resource' resolved to stream $r")
+      if (r ne null) Some((r, name, None)) else None
+    } catch {
+      case ex if NonFatal(ex) =>
+        if (debug) ex.printStackTrace()
+        None
+    }
 
   private[this] def getStreamForLambda(l: AnyRef): Option[(InputStream, String, Some[String])] =
     try {
@@ -199,12 +203,12 @@ object AkkaLineNumbers {
         case serialized: SerializedLambda =>
           if (debug)
             println(s"LNB:     found Lambda implemented in ${serialized.getImplClass}:${serialized.getImplMethodName}")
-          Option(c.getClassLoader.getResourceAsStream(serialized.getImplClass + ".class"))
-            .map((_, serialized.getImplClass, Some(serialized.getImplMethodName)))
+          val r = c.getClassLoader.getResourceAsStream(serialized.getImplClass + ".class")
+          if (r ne null) Some((r, serialized.getImplClass, Some(serialized.getImplMethodName))) else None
         case _ => None
       }
     } catch {
-      case NonFatal(ex) =>
+      case ex if NonFatal(ex) =>
         if (debug) ex.printStackTrace()
         None
     }
@@ -276,20 +280,21 @@ object AkkaLineNumbers {
     skip(d, length)
   }
 
-  private[this] def readMethods(d: DataInputStream, methodName: Option[String])(
-    implicit c: Constants
+  private[this] def readMethods(d: DataInputStream, methodName: Option[String])(implicit
+    c: Constants
   ): Option[(Int, Int)] = {
     val count = d.readUnsignedShort()
     if (debug) println(s"LNB: reading $count methods")
     if (c.contains("Code") && c.contains("LineNumberTable"))
       (1 to count)
-        .flatMap(_ => readMethod(d, c("Code"), c("LineNumberTable"), methodName))
-        .foldLeft(Int.MaxValue -> 0) {
-          case ((low, high), (start, end)) => (Math.min(low, start), Math.max(high, end))
+        .flatMap(_ => readMethod(d, c("Code"), c("LineNumberTable"), methodName).toList)
+        .foldLeft(Int.MaxValue -> 0) { case ((low, high), (start, end)) =>
+          (Math.min(low, start), Math.max(high, end))
         } match {
         case (Int.MaxValue, 0) => None
         case other             => Some(other)
-      } else {
+      }
+    else {
       if (debug) println(s"LNB:   (skipped)")
       var i = 1
       while (i <= count) {

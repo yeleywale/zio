@@ -16,23 +16,42 @@
 
 package zio.test
 
-import zio.{ Managed, ZIO }
+import zio.{ExecutionStrategy, Has, Layer, UIO, ZIO}
+
+/**
+ * A `TestExecutor[R, E]` is capable of executing specs that require an
+ * environment `R` and may fail with an `E`.
+ */
+abstract class TestExecutor[+R <: Has[_], E] {
+  def run(spec: ZSpec[R, E], defExec: ExecutionStrategy): UIO[ExecutedSpec[E]]
+  def environment: Layer[Nothing, R]
+}
 
 object TestExecutor {
-  def managed[R <: Annotations, E, L, S](
-    environment: Managed[Nothing, R]
-  ): TestExecutor[R, E, L, S, S] =
-    (spec: ZSpec[R, E, L, S], defExec: ExecutionStrategy) => {
+  def default[R <: Annotations, E](
+    env: Layer[Nothing, R]
+  ): TestExecutor[R, E] = new TestExecutor[R, E] {
+    def run(spec: ZSpec[R, E], defExec: ExecutionStrategy): UIO[ExecutedSpec[E]] =
       spec.annotated
-        .provideManaged(environment)
+        .provideLayer(environment)
         .foreachExec(defExec)(
           e =>
             e.failureOrCause.fold(
-              { case (failure, annotations) => ZIO.succeed((Left(failure), annotations)) },
-              cause => ZIO.succeed((Left(TestFailure.Runtime(cause)), TestAnnotationMap.empty))
-            ), {
-            case (success, annotations) => ZIO.succeed((Right(success), annotations))
+              { case (failure, annotations) => ZIO.succeedNow((Left(failure), annotations)) },
+              cause => ZIO.succeedNow((Left(TestFailure.Runtime(cause)), TestAnnotationMap.empty))
+            ),
+          { case (success, annotations) =>
+            ZIO.succeedNow((Right(success), annotations))
           }
         )
-    }
+        .use(_.foldM[Any, Nothing, ExecutedSpec[E]](defExec) {
+          case Spec.SuiteCase(label, specs, _) =>
+            specs.map(specs => ExecutedSpec.suite(label, specs))
+          case Spec.TestCase(label, test, staticAnnotations) =>
+            test.map { case (result, dynamicAnnotations) =>
+              ExecutedSpec.test(label, result, staticAnnotations ++ dynamicAnnotations)
+            }.toManaged_
+        }.useNow)
+    val environment = env
+  }
 }

@@ -16,9 +16,9 @@
 
 package zio
 
-import scala.annotation.tailrec
-
 import zio.internal.stacktracer.ZTraceElement
+
+import scala.annotation.tailrec
 
 final case class ZTrace(
   fiberId: Fiber.Id,
@@ -44,9 +44,9 @@ final case class ZTrace(
       else s"Fiber:$fiberId ZIO Execution trace: <empty trace>" :: Nil
 
     val ancestry: List[String] =
-      parentTrace.map { trace =>
-        s"Fiber:$fiberId was spawned by:\n" :: trace.prettyPrint :: Nil
-      }.getOrElse(s"Fiber:$fiberId was spawned by: <empty trace>" :: Nil)
+      parentTrace
+        .map(trace => s"Fiber:$fiberId was spawned by:\n" :: trace.prettyPrint :: Nil)
+        .getOrElse(s"Fiber:$fiberId was spawned by: <empty trace>" :: Nil)
 
     (stackPrint ++ ("" :: execPrint) ++ ("" :: ancestry)).mkString("\n")
   }
@@ -56,7 +56,7 @@ final case class ZTrace(
    *
    * NOTE: `parentTrace` fields are still populated for members of this list,
    * despite that the next trace in the list is equivalent to `parentTrace`
-   * */
+   */
   def parents: List[ZTrace] = {
     val builder = List.newBuilder[ZTrace]
     var parent  = parentTrace.orNull

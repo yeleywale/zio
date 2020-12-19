@@ -1,9 +1,7 @@
 package zio.internal
 
 import org.openjdk.jcstress.annotations._
-import org.openjdk.jcstress.infra.results.{ IIIIII_Result, IIII_Result, II_Result }
-
-import zio.internal.impls.RingBufferArb
+import org.openjdk.jcstress.infra.results.{IIIIII_Result, IIII_Result, II_Result}
 
 object RingBufferArbConcurrencyTests {
   /*
@@ -18,7 +16,7 @@ object RingBufferArbConcurrencyTests {
   )
   @State
   class OfferTest {
-    val q = RingBufferArb[Int](2)
+    val q: RingBufferArb[Int] = RingBufferArb[Int](2)
 
     @Actor
     def actor1(): Unit = {
@@ -69,7 +67,7 @@ object RingBufferArbConcurrencyTests {
   )
   @State
   class OfferTestMaxedCapacity {
-    val q                                    = RingBufferArb[Int](2)
+    val q: RingBufferArb[Int]                = RingBufferArb[Int](2)
     var (offer11, offer12, offer21, offer22) = (0, 0, 0, 0)
 
     @Actor
@@ -138,8 +136,8 @@ object RingBufferArbConcurrencyTests {
   )
   @State
   class OfferPollTest {
-    val q                    = RingBufferArb[Int](2)
-    var (p11, p12, p21, p22) = (0, 0, 0, 0)
+    val q: RingBufferArb[Int] = RingBufferArb[Int](2)
+    var (p11, p12, p21, p22)  = (0, 0, 0, 0)
 
     @Actor
     def actor1(): Unit = {

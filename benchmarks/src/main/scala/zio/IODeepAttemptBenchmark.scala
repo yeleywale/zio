@@ -1,22 +1,21 @@
 package zio
 
-import java.util.concurrent.TimeUnit
-
-import scala.concurrent.Await
-
-import IOBenchmarks._
 import org.openjdk.jmh.annotations._
+import zio.IOBenchmarks._
+
+import java.util.concurrent.TimeUnit
+import scala.concurrent.Await
 
 @State(Scope.Thread)
 @BenchmarkMode(Array(Mode.Throughput))
 @OutputTimeUnit(TimeUnit.SECONDS)
 class IODeepAttemptBenchmark {
-  case class ScalazError(message: String)
+  case class ZIOError(message: String)
 
   @Param(Array("1000"))
   var depth: Int = _
 
-  def halfway = depth / 2
+  def halfway: Int = depth / 2
 
   @Benchmark
   def thunkDeepAttempt(): BigInt = {
@@ -35,7 +34,8 @@ class IODeepAttemptBenchmark {
 
     def descend(n: Int): Future[BigInt] =
       if (n == depth) Future.failed(new Exception("Oh noes!"))
-      else if (n == halfway) descend(n + 1).recover { case _ => 50 } else descend(n + 1).map(_ + n)
+      else if (n == halfway) descend(n + 1).recover { case _ => 50 }
+      else descend(n + 1).map(_ + n)
 
     Await.result(descend(0), Inf)
   }
@@ -91,13 +91,14 @@ class IODeepAttemptBenchmark {
 
   @Benchmark
   def twitterDeepAttempt(): BigInt = {
-    import com.twitter.util.{ Await, Future }
+    import com.twitter.util.{Await, Future}
 
     def descent(n: Int): Future[BigInt] =
       if (n == depth)
         Future.exception(new Error("Oh noes!"))
       else if (n == halfway)
-        descent(n + 1).handle { case _ => 50 } else descent(n + 1).map(_ + n)
+        descent(n + 1).handle { case _ => 50 }
+      else descent(n + 1).map(_ + n)
 
     Await.result(descent(0))
   }
@@ -111,13 +112,13 @@ class IODeepAttemptBenchmark {
       else if (n == halfway) descend(n + 1).attempt.map(_.fold(_ => 50, a => a))
       else descend(n + 1).map(_ + n)
 
-    descend(0).runSyncStep.right.get
+    descend(0).runSyncStep.fold(_ => sys.error("Either.right.get on Left"), identity)
   }
 
   @Benchmark
-  def scalazDeepAttempt(): BigInt = {
-    def descend(n: Int): IO[ScalazError, BigInt] =
-      if (n == depth) IO.fail(ScalazError("Oh noes!"))
+  def zioDeepAttempt(): BigInt = {
+    def descend(n: Int): IO[ZIOError, BigInt] =
+      if (n == depth) IO.fail(ZIOError("Oh noes!"))
       else if (n == halfway) descend(n + 1).fold[BigInt](_ => 50, identity)
       else descend(n + 1).map(_ + n)
 
@@ -125,7 +126,7 @@ class IODeepAttemptBenchmark {
   }
 
   @Benchmark
-  def scalazDeepAttemptBaseline(): BigInt = {
+  def zioDeepAttemptBaseline(): BigInt = {
     def descend(n: Int): IO[Error, BigInt] =
       if (n == depth) IO.fail(new Error("Oh noes!"))
       else if (n == halfway) descend(n + 1).fold[BigInt](_ => 50, identity)

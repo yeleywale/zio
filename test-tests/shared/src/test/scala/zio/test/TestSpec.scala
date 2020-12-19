@@ -3,12 +3,12 @@ package zio.test
 import zio.ZIO
 import zio.clock._
 import zio.test.Assertion._
-import zio.test.TestAspect.failure
+import zio.test.TestAspect.failing
 import zio.test.TestUtils.execute
 
 object TestSpec extends ZIOBaseSpec {
 
-  def spec = suite("TestSpec")(
+  def spec: Spec[Clock, TestFailure[Any], TestSuccess] = suite("TestSpec")(
     testM("assertM works correctly") {
       assertM(nanoTime)(equalTo(0L))
     },
@@ -17,7 +17,7 @@ object TestSpec extends ZIOBaseSpec {
         _      <- ZIO.fail("fail")
         result <- ZIO.succeed("succeed")
       } yield assert(result)(equalTo("succeed"))
-    } @@ failure,
+    } @@ failing,
     testM("testM is polymorphic in error type") {
       for {
         _      <- ZIO.effect(())

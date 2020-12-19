@@ -16,9 +16,8 @@
 
 package zio.test
 
-import scala.reflect.ClassTag
-
 import zio.duration._
+import zio.{Chunk, Fiber, Tag}
 
 /**
  * A type of annotation.
@@ -27,21 +26,19 @@ final class TestAnnotation[V] private (
   val identifier: String,
   val initial: V,
   val combine: (V, V) => V,
-  private val classTag: ClassTag[V]
+  private val tag: Tag[V]
 ) extends Serializable {
   override def equals(that: Any): Boolean = that match {
-    case that: TestAnnotation[_] => (identifier, classTag) == ((that.identifier, that.classTag))
+    case that: TestAnnotation[_] => (identifier, tag) == ((that.identifier, that.tag))
   }
 
-  override lazy val hashCode =
-    (identifier, classTag).hashCode
+  override lazy val hashCode: Int =
+    (identifier, tag).hashCode
 }
 object TestAnnotation {
 
-  def apply[V](identifier: String, initial: V, combine: (V, V) => V)(
-    implicit classTag: ClassTag[V]
-  ): TestAnnotation[V] =
-    new TestAnnotation(identifier, initial, combine, classTag)
+  def apply[V](identifier: String, initial: V, combine: (V, V) => V)(implicit tag: Tag[V]): TestAnnotation[V] =
+    new TestAnnotation(identifier, initial, combine, tag)
 
   /**
    * An annotation which counts ignored tests.
@@ -62,8 +59,29 @@ object TestAnnotation {
     TestAnnotation("retried", 0, _ + _)
 
   /**
+   * An annotation which tags tests with strings.
+   */
+  val tagged: TestAnnotation[Set[String]] =
+    TestAnnotation("tagged", Set.empty, _ union _)
+
+  /**
    * An annotation for timing.
    */
   val timing: TestAnnotation[Duration] =
     TestAnnotation("timing", Duration.Zero, _ + _)
+
+  import scala.collection.immutable.SortedSet
+
+  import zio.Ref
+
+  val fibers: TestAnnotation[Either[Int, Chunk[Ref[SortedSet[Fiber.Runtime[Any, Any]]]]]] =
+    TestAnnotation("fibers", Left(0), compose(_, _))
+
+  def compose[A](left: Either[Int, Chunk[A]], right: Either[Int, Chunk[A]]): Either[Int, Chunk[A]] =
+    (left, right) match {
+      case (Left(n), Left(m))           => Left(n + m)
+      case (Right(refs1), Right(refs2)) => Right(refs1 ++ refs2)
+      case (Right(_), Left(n))          => Left(n)
+      case (Left(_), Right(refs))       => Right(refs)
+    }
 }
